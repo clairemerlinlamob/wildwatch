@@ -1,34 +1,37 @@
 import * as Location from "expo-location";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import AnimalModal from "./AnimalModal";
-import type AnimalMarker from "./types";
+import { useWildWatchData } from "../stores";
 
 export default function Index() {
-  const [currentLocation, setCurrentLocation] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  const {
+    // États du store
+    markers,
+    currentLocation,
+    initialRegion,
+    selectedMarker,
+    modalVisible,
+    selectedCoordinate,
+    isHydrated,
 
-  const [initialRegion, setInitialRegion] = useState<{
-    latitude: number;
-    longitude: number;
-    latitudeDelta: number;
-    longitudeDelta: number;
-  } | null>(null);
-
-  const [markers, setMarkers] = useState<AnimalMarker[]>([]);
-  const [selectedMarker, setSelectedMarker] = useState<AnimalMarker | null>(
-    null
-  );
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedCoordinate, setSelectedCoordinate] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+    // Actions du store
+    setCurrentLocation,
+    setInitialRegion,
+    setSelectedMarker,
+    setModalVisible,
+    setSelectedCoordinate,
+    addMarkerWithPersistence,
+    updateMarkerWithPersistence,
+    initializeStores,
+    clearSelectedData,
+  } = useWildWatchData();
 
   useEffect(() => {
+    // Initialiser les stores (gère l'hydratation asynchrone)
+    initializeStores();
+
     const getLocation = async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
@@ -37,10 +40,12 @@ export default function Index() {
       }
 
       let location = await Location.getCurrentPositionAsync({});
-      setCurrentLocation({
+      const currentLoc = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
-      });
+      };
+
+      setCurrentLocation(currentLoc);
 
       setInitialRegion({
         latitude: location.coords.latitude,
@@ -53,47 +58,18 @@ export default function Index() {
     getLocation();
   }, []);
 
+  // Log pour déboguer
+  useEffect(() => {
+    console.log("État de l'hydratation:", isHydrated);
+    console.log("Nombre de marqueurs:", markers.length);
+  }, [isHydrated, markers.length]);
+
   const handleMapPress = (event: any) => {
     const { coordinate } = event.nativeEvent;
     // Réinitialiser le marqueur sélectionné quand on clique sur la carte
     setSelectedMarker(null);
     setSelectedCoordinate(coordinate);
     setModalVisible(true);
-  };
-
-  const addMarker = (animalData: {
-    name: string;
-    photoUri: string;
-    selectedDate: string;
-    selectedTime: string;
-  }) => {
-    if (!selectedCoordinate) return;
-
-    const newMarker: AnimalMarker = {
-      id: animalData.name + selectedCoordinate.latitude,
-      coordinate: selectedCoordinate,
-      name: animalData.name,
-      photoUri: animalData.photoUri,
-      selectedDate: animalData.selectedDate,
-      selectedTime: animalData.selectedTime,
-    };
-
-    setMarkers([...markers, newMarker]);
-  };
-
-  const updateMarker = (
-    markerId: string,
-    animalData: {
-      name: string;
-      photoUri: string;
-      selectedDate: string;
-      selectedTime: string;
-    }
-  ) => {
-    const updatedMarkers = markers.map((marker) =>
-      marker.id === markerId ? { ...marker, ...animalData } : marker
-    );
-    setMarkers(updatedMarkers);
   };
 
   const handleMarkerPress = (markerId: string, event: any) => {
@@ -136,13 +112,11 @@ export default function Index() {
       <AnimalModal
         modalVisible={modalVisible}
         setModalVisible={setModalVisible}
-        addMarker={addMarker}
-        updateMarker={updateMarker}
+        addMarker={addMarkerWithPersistence}
+        updateMarker={updateMarkerWithPersistence}
         selectedMarker={selectedMarker}
         onClose={() => {
-          setSelectedCoordinate(null);
-          setSelectedMarker(null);
-          setModalVisible(false);
+          clearSelectedData();
         }}
       />
     </View>
